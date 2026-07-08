@@ -1,8 +1,32 @@
 # Desplega Labs
 
-**Made by builders, for builders.**
+Desplega Labs builds AI-native infrastructure for software teams that want agents to do real work with memory, coordination, and proof.
 
-- [agent-swarm](https://github.com/desplega-ai/agent-swarm) a Company-wide Agentic OS. Your whole team gets AI agents that remember, coordinate, reason and act. [docs](https://docs.agent-swarm.dev)
-- [agent-fs](https://github.com/desplega-ai/agent-fs) A persistent, searchable filesystem thought for agents that collaborate with humans. [docs](https://agent-fs.dev/docs)
-- [qa-use](https://github.com/desplega-ai/qa-use) — Agent-first browser automation and e2e testing, meant for agents to give you factual proof-of-work. [docs](https://qa-use.dev)
-- [ai-toolbox](https://github.com/desplega-ai/ai-toolbox) — Command-line tools built for agents to develop and use.
+We steward two sibling products:
+
+## agent-swarm
+
+An agent swarm framework for AI coding agents.
+
+agent-swarm gives teams a way to run persistent coding agents that can take tasks, share context, coordinate through tools, and ship changes through the same workflows humans use.
+
+- Product: [agent-swarm.dev](https://agent-swarm.dev)
+- Core repo: [desplega-ai/agent-swarm](https://github.com/desplega-ai/agent-swarm)
+- Cloud: [cloud.agent-swarm.dev](https://cloud.agent-swarm.dev)
+
+## desplega.ai
+
+QA with AI for end-to-end web testing.
+
+desplega.ai records browser behavior, turns it into automated tests, and runs those tests so teams can verify web apps with factual proof instead of guesswork.
+
+- Product: [desplega.ai](https://desplega.ai)
+- Platform repo: [desplega-ai/desplega.ai](https://github.com/desplega-ai/desplega.ai)
+- Browser testing CLI: [desplega-ai/qa-use](https://github.com/desplega-ai/qa-use)
+- GitHub Action: [desplega-ai/desplega.ai-action](https://github.com/desplega-ai/desplega.ai-action)
+
+## Start here
+
+- Company: [desplega.sh](https://desplega.sh)
+- Agent framework: [agent-swarm.dev](https://agent-swarm.dev)
+- AI QA platform: [desplega.ai](https://desplega.ai)
