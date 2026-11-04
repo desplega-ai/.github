@@ -1,0 +1,29 @@
+name: Require a green PR Body
+description: >-
+  Fails unless the latest PR Body check on the PR head passed. Add it as the last
+  step of a job that branch protection already requires, so a PR whose
+  description skips the template cannot merge. Skips on merge_group and push.
+  The job needs `permissions: checks: read`.
+inputs:
+  check-name:
+    description: The PR Body check name. Also matches "<caller job> / <check-name>" (reusable workflow callers).
+    default: PR Body
+  timeout-seconds:
+    description: How long to wait for the PR Body check to finish.
+    default: "600"
+  github-token:
+    description: Token with checks read access.
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - name: Require a green PR Body
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        EVENT_NAME: ${{ github.event_name }}
+        CHECK_NAME: ${{ inputs.check-name }}
+        TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
+      run: bash "$GITHUB_ACTION_PATH/../../pr-body/require-pr-body.sh"
