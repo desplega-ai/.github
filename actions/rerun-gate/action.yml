@@ -1,0 +1,32 @@
+name: Re-run the gate after a PR description edit
+description: >-
+  Re-runs the required job that embeds require-pr-body, so its status follows
+  an edited PR description without a push. Use it in a job that runs after the
+  PR Body job on `edited`, `labeled` and `unlabeled` events. Same-repo PRs only:
+  the job needs `permissions: actions: write`, which fork PRs never get.
+inputs:
+  workflow:
+    description: File name of the workflow that holds the gate job, e.g. ci.yml.
+    required: true
+  job:
+    description: Name of the gate job, as shown in the checks list, e.g. ci.
+    required: true
+  body-result:
+    description: Result of the PR Body job (needs.<job>.result).
+    required: true
+  github-token:
+    description: Token with actions write access.
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - name: Re-run the gate job when it disagrees with the PR body
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        GATE_WORKFLOW: ${{ inputs.workflow }}
+        GATE_JOB: ${{ inputs.job }}
+        BODY_RESULT: ${{ inputs.body-result }}
+      run: bash "$GITHUB_ACTION_PATH/../../pr-body/rerun-gate.sh"

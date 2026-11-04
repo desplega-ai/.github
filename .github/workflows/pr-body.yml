@@ -1,0 +1,163 @@
+name: PR Body
+
+# Org-wide PR description check. A desplega-ai repo calls it so every PR fills
+# the repo's PR template, or the org default (pull_request_template.md here).
+# The checker is the same code agent-swarm runs (pr-body/); see pr-body/README.md.
+#
+# Caller (copy into .github/workflows/pr-body.yml and pin both SHAs):
+#
+#   on:
+#     pull_request:
+#       branches: [main]
+#       types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+#     merge_group:
+#   jobs:
+#     pr-body:
+#       uses: desplega-ai/.github/.github/workflows/pr-body.yml@<sha>
+#       with:
+#         ref: <sha>              # the same SHA: loads the checker and org default
+#         gate-workflow: ci.yml   # optional: the workflow of a required job that
+#         gate-job: ci            #   runs actions/require-pr-body (see README)
+#       permissions:            # all three, even without a gate: GitHub checks every
+#         contents: read          #   nested job's permissions before it evaluates `if`
+#         pull-requests: read
+#         actions: write
+#
+# The check is named "pr-body / PR Body" in the caller.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: The desplega-ai/.github commit to load the checker and the org default template from. Keep it equal to the pinned SHA.
+        type: string
+        required: true
+      gate-workflow:
+        description: File name of the workflow whose required job runs actions/require-pr-body. Empty means no gate to sync.
+        type: string
+        default: ""
+      gate-job:
+        description: Name of that required job.
+        type: string
+        default: ""
+    outputs:
+      urgency:
+        description: The checked Urgency choice, when the template has one.
+        value: ${{ jobs.pr-body.outputs.urgency }}
+      risk:
+        description: The Risk level, when the template has a Risk line.
+        value: ${{ jobs.pr-body.outputs.risk }}
+
+jobs:
+  pr-body:
+    name: PR Body
+    # Merge-queue entries were checked as PRs before they queued; a skipped job
+    # reports success, so a required check never stalls the queue. Dependabot
+    # and release PRs write their own bodies. The label is the manual escape hatch.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      !startsWith(github.event.pull_request.title, 'release:') &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-pr-body-check')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      urgency: ${{ steps.check.outputs.urgency }}
+      risk: ${{ steps.check.outputs.risk }}
+
+    steps:
+      - name: Check out the checker
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: desplega-ai/.github
+          ref: ${{ inputs.ref }}
+          path: .pr-body-check
+          persist-credentials: false
+          sparse-checkout: |
+            pr-body
+            pull_request_template.md
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+
+      - name: Read the PR, its files and its template
+        # Read the live PR, not the event payload, so a re-run checks the current description.
+        # The template comes from the base commit, so a PR cannot loosen its own check.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/pulls/$PR" > "$RUNNER_TEMP/pr.json"
+          jq -r '.body // ""' "$RUNNER_TEMP/pr.json" > "$RUNNER_TEMP/body.md"
+          gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-files.txt"
+
+          # GitHub's lookup order for a single PR template.
+          for p in .github/pull_request_template.md .github/PULL_REQUEST_TEMPLATE.md \
+                   pull_request_template.md PULL_REQUEST_TEMPLATE.md \
+                   docs/pull_request_template.md docs/PULL_REQUEST_TEMPLATE.md; do
+            if gh api "repos/$REPO/contents/$p?ref=$BASE_SHA" -H "Accept: application/vnd.github.raw" \
+                 > "$RUNNER_TEMP/template.md" 2>/dev/null; then
+              echo "Template: $REPO/$p"
+              exit 0
+            fi
+          done
+          cp .pr-body-check/pull_request_template.md "$RUNNER_TEMP/template.md"
+          echo "Template: org default (desplega-ai/.github/pull_request_template.md)"
+
+      - name: Check the PR body against the template
+        id: check
+        working-directory: .pr-body-check/pr-body
+        env:
+          PR_TEMPLATE_PATH: ${{ runner.temp }}/template.md
+          PR_CHANGED_FILES_FILE: ${{ runner.temp }}/changed-files.txt
+          # Bot-authored bodies also get the leak check and need Swarm provenance.
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_ADDITIONS: ${{ github.event.pull_request.additions }}
+          PR_DELETIONS: ${{ github.event.pull_request.deletions }}
+        run: |
+          PR_TITLE=$(jq -r .title "$RUNNER_TEMP/pr.json") \
+          PR_CHANGED_LINES=$(( ${PR_ADDITIONS:-0} + ${PR_DELETIONS:-0} )) \
+            bun scripts/check-pr-body.ts --body-file "$RUNNER_TEMP/body.md"
+
+  sync-gate:
+    name: Sync gate
+    needs: pr-body
+    # A description edit does not re-run the caller's required job, so re-run it
+    # here. Pushes and reopens start that workflow anyway. Fork PRs get a
+    # read-only token: a maintainer re-runs the gate by hand there.
+    if: >-
+      always() &&
+      inputs.gate-workflow != '' &&
+      github.event_name == 'pull_request' &&
+      contains(fromJSON('["edited", "labeled", "unlabeled"]'), github.event.action) &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Check out the gate script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: desplega-ai/.github
+          ref: ${{ inputs.ref }}
+          path: .pr-body-check
+          persist-credentials: false
+          sparse-checkout: pr-body
+
+      - name: Re-run the gate job when it disagrees with the PR body
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GATE_WORKFLOW: ${{ inputs.gate-workflow }}
+          GATE_JOB: ${{ inputs.gate-job }}
+          BODY_RESULT: ${{ needs.pr-body.result }}
+        run: bash .pr-body-check/pr-body/rerun-gate.sh

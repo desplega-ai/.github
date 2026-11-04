@@ -1,0 +1,23 @@
+name: PR Body (self)
+
+# This repo's own PRs, through the same reusable workflow at the PR's commit.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
+
+concurrency:
+  group: pr-body-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  pr-body:
+    uses: ./.github/workflows/pr-body.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+    # actions: write is unused here (no gate), but GitHub checks the nested
+    # sync-gate job's permissions before it evaluates its `if`.
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
