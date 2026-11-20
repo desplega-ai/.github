@@ -85,7 +85,7 @@ jobs:
         with:
           bun-version: 1.4.4
 
-      - name: Read the PR, its files and its template
+      - name: Read the PR and its template
         # Read the live PR, not the event payload, so a re-run checks the current description.
         # The template comes from the base commit, so a PR cannot loosen its own check.
         env:
@@ -97,7 +97,6 @@ jobs:
           set -euo pipefail
           gh api "repos/$REPO/pulls/$PR" > "$RUNNER_TEMP/pr.json"
           jq -r '.body // ""' "$RUNNER_TEMP/pr.json" > "$RUNNER_TEMP/body.md"
-          gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename' > "$RUNNER_TEMP/changed-files.txt"
 
           # GitHub's lookup order for a single PR template.
           for p in .github/pull_request_template.md .github/PULL_REQUEST_TEMPLATE.md \
@@ -117,7 +116,6 @@ jobs:
         working-directory: .pr-body-check/pr-body
         env:
           PR_TEMPLATE_PATH: ${{ runner.temp }}/template.md
-          PR_CHANGED_FILES_FILE: ${{ runner.temp }}/changed-files.txt
           # Bot-authored bodies also get the leak check and need Swarm provenance.
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_ADDITIONS: ${{ github.event.pull_request.additions }}

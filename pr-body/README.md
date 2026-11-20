@@ -13,12 +13,40 @@ check that enforces it.
 
 ## Rules
 
-The template is the rule set. `**Label:**` lines before the first heading are
-required. Every `## ` section is required unless its heading carries a marker:
-`optional`, `fix`, `ui`, `bot`, `outline` or `pick one`. The comment at the top
-of `pull_request_template.md` explains each one. Bodies by `desplega-bot` also
-get the leak check: no Slack ids, chat quotes, or task, dashboard, agent-fs or
-Slack links outside `## Swarm provenance`.
+The template is the rule set. The checker holds no repo paths and no section
+names: every rule comes from an HTML comment marker in the template.
+
+| Marker | Where | Rule |
+|---|---|---|
+| (none) | `**Label:**` line before the first heading | required, with text |
+| `one of: a \| b \| c` | lead line | the value is one of them, a reason in parentheses may follow |
+| `max words: N`, `hard max words: N` | lead line | warns above the first, fails above the second |
+| (none) | `## ` heading | the section is required, with text |
+| `optional` | heading | the section may be deleted |
+| `evidence` | heading | always required: a fence with content, a table with a data row, media with a source, `Before: ... After: ...`, or `No visible change: <reason>` |
+| `outline` | heading | may be skipped when Risk is low and the diff is 50 lines or fewer |
+| `bot` | heading | required when `desplega-bot` is the author. Present content is links only, each as `[label](url)` |
+| `link: Task` | heading with `bot` | the bot must link that label |
+| `fix`, `fix mentions: main` | heading | required for a `fix:` title, or the section must hold that word for a `fix:` title |
+| `max rows: N`, `max bullets: N`, `max code lines: N` | heading | warning only |
+| `pick one` | heading | exactly one checked `- [ ]` item |
+
+Prose warns above 200 words and fails above 300. Code blocks, tables and
+`<details>` do not count.
+
+A template line `<!-- new rules fail from: YYYY-MM-DD -->` opens a window: until
+that date the newer rules (evidence, the provenance link format, the fix
+control, the length limits) only warn. Delete the line after the date.
+
+Bodies by `desplega-bot` also get the leak check: no Slack ids, chat quotes, or
+task, dashboard, agent-fs or Slack links outside `## Swarm provenance`.
+
+Local check, from a clone of this repo:
+
+```bash
+cd pr-body && PR_TEMPLATE_PATH=../pull_request_template.md \
+  bun scripts/check-pr-body.ts --title "<title>" --body-file <absolute path> --author <login>
+```
 
 Skipped: Dependabot PRs, `release:` titles, and PRs labeled `skip-pr-body-check`.
 
